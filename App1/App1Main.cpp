@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "App1Main.h"
 #include "Common\DirectXHelper.h"
+#include "math.h"       /* sin */
+
+#define PI 3.14159265
 
 using namespace App1;
 using namespace Windows::Foundation;
@@ -12,7 +15,7 @@ using namespace std;
 
 // The DirectX 12 Application template is documented at https://go.microsoft.com/fwlink/?LinkID=613670&clcid=0x409
 
-const DWORD dwChunkSize = 25600;
+const DWORD dwChunkSize = 256000;
 const DWORD maxWord = 2 ^ 16;
 
 
@@ -50,7 +53,7 @@ App1Main::App1Main()
 		return;
 	// Note:TBA   Ensure that all smart pointers to XAUDIO2 objects are fully released before you release the IXAudio2 object.
 
-	// 	Create abd Populate an XAUDIO2_BUFFER structure.
+	// 	Create and Populate an XAUDIO2_BUFFER structure.
 	XAUDIO2_BUFFER buffer = { 0 };
 //	DWORD dwChunkSize = 25600;
 	BYTE * pDataBuffer = new BYTE[dwChunkSize];
@@ -74,10 +77,72 @@ App1Main::App1Main()
 
 //	* (pDataBuffer) = 0;
 //	for (byte *p = pDataBuffer;p < pDataBuffer + dwChunkSize;p++) { *p = 127; };
+
+	bool FirstChar = true;
+	bool High = true; // switch
+	int BytesinBlock = 2;
+	int BytesInHalfCycle = 256; // move from low to high or from high to low after this many bytes
+	BYTE HighFirstChar  = 0b00001111;
+	BYTE HighSecondChar = 0b00000000;
+	BYTE LowFirstChar   = 0b00000000;
+	BYTE LowSecondChar  = 0b00000000;
+	
 	for (int i = 0; i < dwChunkSize; i=i+1) {
-		*(pDataBuffer+i) = i; 
+		// First, set up the two boolean variables which determine what goes in this Byte
+		if (i % BytesInHalfCycle == 0) { High = !High; }
+		if (i % BytesinBlock == 0) { FirstChar = true; } else { FirstChar = false; }
+
+		//Then put in the appropriate byte
+		if (High) {  
+			if (FirstChar){ *(pDataBuffer + i) = HighFirstChar; }
+			else          { *(pDataBuffer + i) = HighSecondChar; }
+		}
+		else {
+			if (FirstChar) { *(pDataBuffer + i) = LowFirstChar; }
+			else           { *(pDataBuffer + i) = LowSecondChar; }
+		}
+		;
+	//	*(pDataBuffer+i) = HighFirstChar;
+
+		
 		//*(pDataBuffer + i+1) = 0;
+	};//  FOR LOOP
+
+	//sin
+	union byteint
+	{
+		byte b[sizeof int16_t];
+		int16_t iValue;
 	};
+	byteint bi;
+	
+//	bi.iValue = 1337;
+//	for (int i = 0; i<4;i++)
+//		destination[i] = bi.b[i];
+	float volume;
+
+
+	for (int i = 0; i < dwChunkSize; i = i + 2) {
+		if (i < dwChunkSize * 7 / 8)
+		    {
+			volume = 256 * 64 * i / dwChunkSize;
+		    }
+		else {
+			volume = volume * .99;
+			};
+		
+		bi.iValue = (volume)* (1 + sin (2* PI * i / BytesInHalfCycle)); // should go from 0 to 256*128
+		*(pDataBuffer + i) = bi.b[0];   // first byte should be least significant
+		*(pDataBuffer + i+1) = bi.b[1]; //second byte should be most significant
+		
+	};//  FOR LOOP
+
+
+
+
+
+
+
 
 	buffer.AudioBytes = dwChunkSize;      // size of the audio buffer in bytes
 	buffer.pAudioData = pDataBuffer;  // buffer containing audio data
